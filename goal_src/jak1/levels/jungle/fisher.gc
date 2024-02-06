@@ -6,7 +6,7 @@
 ;; dgos: JUN
 
 (declare-type fisher-fish process-drawable)
-
+(define *current-alive-time* 0)
 ;; DECOMP BEGINS
 
 (deftype fisher-bank (basic)
@@ -841,6 +841,7 @@
 
 (defbehavior fisher-fish-move fisher-fish ()
   (+! (-> self pos) (* (-> self vel) (seconds-per-frame)))
+      (set! *current-alive-time* (/ (- (current-time) (-> (the-as fisher (ppointer->process (-> self parent))) start-time) ) (seconds 1))) 
   (eval-path-curve-div! (-> (the-as fisher (-> self parent 0)) path) (-> self root trans) (-> self pos) 'interp)
   (path-control-method-12 (-> (the-as fisher (-> self parent 0)) path) (-> self dir) (-> self pos))
   (seek-toward-heading-vec! (-> self root) (-> self dir) 291271.12 (seconds 0.2))
@@ -864,6 +865,7 @@
 
 (defstate fisher-fish-fall (fisher-fish)
   :code (behavior ()
+    (set! *current-alive-time* (/ (- (current-time) (-> (the-as fisher (ppointer->process (-> self parent))) start-time) ) (seconds 1))) 
     (set-heading-vec!
       (-> self root)
       (path-control-method-12 (-> (the-as fisher (-> self parent 0)) path) (-> self dir) (-> self pos))
@@ -880,6 +882,8 @@
         (if (or (>= (-> self pos) (the float (+ (-> (the-as fisher (-> self parent 0)) path curve num-cverts) -1)))
                 (>= (-> self pos) 7.2)
                 )
+
+                
             (go fisher-fish-die)
             )
         (suspend)
@@ -943,8 +947,15 @@
 
 (defstate fisher-fish-die (fisher-fish)
   :code (behavior ()
+      (set! (-> *FISHER-bank* max-caught) #x70000000)
+
+  
     (case (-> self mode)
       (('deadly 'bad)
+        (if (> (rand-vu-int-range 1 10) 3)
+       (send-event (ppointer->process (-> self parent)) 'fisher-fish-caught 1)
+       (send-event (ppointer->process (-> self parent)) 'fisher-fish-caught 5)
+        )
        )
       (('powerup)
        (level-hint-spawn
@@ -1050,20 +1061,20 @@
       (set! (-> v1-3 scale) 0.7)
       )
     (set! (-> s5-0 flags) (font-flags shadow kerning right large))
-    (print-game-text (lookup-text! *common-text* (text-id caught) #f) s5-0 #f 128 22)
+    (print-game-text "TIME ALIVE:" s5-0 #f 128 22)
     (set! (-> s5-0 origin x) 488.0)
     (let ((s4-1 print-game-text))
       (format (clear *temp-string*) "~3D" (-> arg0 caught))
-      (s4-1 *temp-string* s5-0 #f 128 22)
+      (s4-1 (string-format "~D" *current-alive-time*) s5-0 #f 128 22)
       )
     (set! (-> s5-0 origin x) 435.0)
     (set! (-> s5-0 origin y) 25.0)
-    (print-game-text (lookup-text! *common-text* (text-id missed) #f) s5-0 #f 128 22)
+    ;;(print-game-text (lookup-text! *common-text* (text-id missed) #f) s5-0 #f 128 22)
     (set! (-> s5-0 origin x) 488.0)
-    (let ((s4-3 print-game-text))
-      (format (clear *temp-string*) "~3D" (-> arg0 missed))
-      (s4-3 *temp-string* s5-0 #f 128 22)
-      )
+    ;; (let ((s4-3 print-game-text))
+    ;;   (format (clear *temp-string*) "~3D" (-> arg0 missed))
+    ;;   (s4-3 *temp-string* s5-0 #f 128 22)
+    ;;   )
     )
   (none)
   )
@@ -1430,16 +1441,16 @@
                         )
                    (set-time! (-> self ambient-big-one))
                    )
-               'powerup
+               'deadly;;'powerup
                )
               ((rand-vu-percent? (-> self params bad-percent))
-               'bad
+               'deadly;;'bad
                )
               ((rand-vu-percent? (-> self params deadly-percent))
-               'deadly
+               'deadly;;'deadly
                )
               (else
-                'normal
+                'deadly;;'normal
                 )
               )
             )
@@ -1703,6 +1714,13 @@
   :virtual #t
   :event (behavior ((proc process) (argc int) (message symbol) (block event-message-block))
     (local-vars (v0-0 rgbaf))
+
+    ;;This just forces it to always be hard mode
+                    (set! (-> self hard) #t)
+                (set! (-> self difficulty) 5)
+                (set! (-> *FISHER-bank* max-caught) #x70000000)
+                (ambient-hint-spawn "FIS-LO03" (the-as vector #f) *entity-pool* 'stinger)
+
     (case message
       (('emissive-on)
        (set-vector! (-> self draw color-mult) 0.6 0.6 0.6 1.0)
